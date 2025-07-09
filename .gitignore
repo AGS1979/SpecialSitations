@@ -1,0 +1,13 @@
+__pycache__/
+.env
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+*.docx~
+*.pdf~
+.idea/
+.vscode/
+.env/
+.streamlit/secrets.toml
