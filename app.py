@@ -8,6 +8,7 @@ from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt
 import tempfile
+import base64
 
 # ========== CONFIG ==========
 try:
@@ -137,6 +138,34 @@ FALLBACK_META = [
     ("💡", "border-pink-600", "bg-pink-50"),
     ("🧠", "border-gray-600", "bg-gray-50"),
 ]
+
+
+
+# ---------------------------
+# LOGO BASE64
+# ---------------------------
+def get_base64_logo(path="logo.png"):
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
+
+logo_base64 = get_base64_logo()
+
+# ---------------------------
+# HEADER: Smaller logo + Title below
+# ---------------------------
+st.markdown(f"""
+    <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; margin-bottom: 1.5rem;">
+        <img src="data:image/png;base64,{logo_base64}" style="height: 36px; width: auto;" />
+        <div style="margin-left: 2px;">
+            <h1 style="font-size: 1.6rem; font-weight: 800; color: #1F2937; margin-bottom: 0.2rem;">
+                Pre-IPO Investment Memo Generator
+            </h1>
+            <p style="font-size: 1rem; color: #4B5563; margin-top: 0;">
+                Upload an IPO/DRHP PDF to generate a structured investment memo with optional Q&A.
+            </p>
+        </div>
+    </div>
+""", unsafe_allow_html=True)
 
 # ==========================
 # Text Extractors
