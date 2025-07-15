@@ -21,6 +21,13 @@ except (KeyError, FileNotFoundError):
 DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 
 
+try:
+    FMP_API_KEY = st.secrets["fmp"]["api_key"]
+except (KeyError, FileNotFoundError):
+    st.error("FMP API key not found in secrets. Please add it under [fmp][api_key].")
+    st.stop()
+
+
 # ==========================
 # Report & Infographic Structures
 # ==========================
@@ -183,6 +190,35 @@ def extract_text_from_docx(file):
 # Memo Generation
 # ==========================
 
+
+def resolve_company_to_ticker(company_name: str) -> str:
+    prompt = f"What is the stock ticker (FMP-compatible) for the public company '{company_name}'?"
+    headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}"}
+    payload = {
+        "model": "deepseek-chat",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0
+    }
+
+    try:
+        res = requests.post(DEEPSEEK_API_URL, headers=headers, json=payload)
+        res.raise_for_status()
+        ticker = res.json()["choices"][0]["message"]["content"].strip()
+        return re.sub(r'[^A-Z\.]', '', ticker)  # sanitize
+    except:
+        return None
+
+def get_ev_ebitda_multiple(ticker: str, fmp_key: str) -> float:
+    url = f"https://financialmodelingprep.com/api/v3/key-metrics-ttm/{ticker}?apikey={fmp_key}"
+    try:
+        r = requests.get(url)
+        data = r.json()
+        if isinstance(data, list) and data:
+            return float(data[0].get("enterpriseValueOverEBITDATTM", 0))
+    except:
+        return 0.0
+
+
 def clean_markdown(text):
     text = re.sub(r'#+\s*', '', text)
     text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
@@ -203,7 +239,9 @@ def generate_special_situation_note(
     uploaded_files: list,
     valuation_mode: str = None,
     parent_peers: str = "",
-    spinco_peers: str = ""
+    spinco_peers: str = "",
+    fmp_key: str = ""
+
 ):
     combined_text = ""
     for file in uploaded_files:
@@ -221,25 +259,43 @@ def generate_special_situation_note(
     # --- Conditional Valuation Section for Spin-Offs ---
     valuation_section = ""
     if situation_type == "Spin-Off or Split-Up" and valuation_mode:
-        if valuation_mode == "I'll enter tickers":
-            valuation_section = f"""
-# Valuation Analysis
-The user has provided the following peer tickers:
-- ParentCo Peers: {parent_peers}
-- SpinCo Peers: {spinco_peers}
 
-Please fetch or approximate public LTM EV/EBITDA and P/E multiples for these peers.
-Then apply these multiples to the extracted LTM financials of ParentCo and SpinCo to estimate standalone valuations.
-Compare the sum of these to the pre-spin ParentCo's market cap to estimate the value unlock potential.
-"""
-        else:
-            valuation_section = """
+        def process_peers(raw: str):
+            names = [n.strip() for n in raw.split(",") if n.strip()]
+            tickers = [resolve_company_to_ticker(n) for n in names]
+            multiples = [get_ev_ebitda_multiple(t, fmp_key) for t in tickers if t]
+            avg_multiple = round(sum(multiples) / len(multiples), 2) if multiples else None
+            return names, tickers, multiples, avg_multiple
+
+    if valuation_mode == "I'll enter peer company names":
+        parent_names, parent_tickers, parent_mults, parent_avg = process_peers(parent_peers)
+        spinco_names, spinco_tickers, spinco_mults, spinco_avg = process_peers(spinco_peers)
+
+
+        valuation_section = f"""
 # Valuation Analysis
-Based on the business descriptions of ParentCo and SpinCo, identify 3–5 appropriate public peer companies for each.
-Then, estimate their LTM EV/EBITDA and P/E multiples, apply them to the extracted financials of ParentCo and SpinCo,
-and compute implied valuations. Finally, compare the combined value to the pre-spin ParentCo market cap and indicate
-the potential value unlock.
+
+Peer companies provided by user:
+
+**ParentCo Peers**: {', '.join(parent_names)}  
+Tickers: {', '.join(parent_tickers)}  
+EV/EBITDA multiples: {parent_mults}  
+**Average EV/EBITDA**: {parent_avg or 'N/A'}
+
+**SpinCo Peers**: {', '.join(spinco_names)}  
+Tickers: {', '.join(spinco_tickers)}  
+EV/EBITDA multiples: {spinco_mults}  
+**Average EV/EBITDA**: {spinco_avg or 'N/A'}
+
+Using the above, estimate SpinCo and ParentCo valuations by applying the average multiples to their respective TTM EBITDA extracted from the docs.
 """
+    else:
+        valuation_section = """
+# Valuation Analysis
+
+Identify relevant peers for ParentCo and SpinCo based on business similarity. Fetch their LTM EV/EBITDA multiples from public data and compute average for each set. Multiply with extracted TTM EBITDA to derive standalone valuations and compare sum with ParentCo market cap to assess value unlock.
+"""
+
 
     # --- Prompt Assembly ---
     prompt = f"""
@@ -255,6 +311,7 @@ Using the structure below, generate a well-written investment memo. Be factual, 
 Structure:
 {structure}
 """
+
 
     headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}"}
     payload = {
@@ -459,14 +516,18 @@ if situation_type_memo == "Spin-Off or Split-Up":
     st.markdown("### 🔍 Valuation Module (Optional)")
 
     valuation_mode = st.radio(
-        "Do you want to provide peer tickers for valuation, or let the model decide?",
-        options=["Let AI choose peers", "I'll enter tickers"],
+        "Do you want to provide peer companies for valuation, or let the model decide?",
+        options=["Let AI choose peers", "I'll enter peer company names"],
         key="valuation_mode"
     )
 
-    if valuation_mode == "I'll enter tickers":
-        parent_peers = st.text_input("Enter ParentCo Peer Tickers (comma-separated)", key="parent_peers")
-        spinco_peers = st.text_input("Enter SpinCo Peer Tickers (comma-separated)", key="spinco_peers")
+    parent_peers_raw = ""
+    spinco_peers_raw = ""
+
+    if valuation_mode == "I'll enter peer company names":
+        parent_peers_raw = st.text_area("Enter ParentCo Peer Company Names (comma-separated)", key="parent_peers_raw")
+        spinco_peers_raw = st.text_area("Enter SpinCo Peer Company Names (comma-separated)", key="spinco_peers_raw")
+
     else:
         st.info("AI will select peers using company descriptions and generate valuation logic automatically.")
 
@@ -479,7 +540,15 @@ if st.button("Generate Memo"):
     else:
         with st.spinner("Generating memo... This may take a moment."):
             try:
-                memo_path = generate_special_situation_note(company_name_memo, situation_type_memo, uploaded_files_memo)
+                memo_path = generate_special_situation_note(
+                    company_name=company_name_memo,
+                    situation_type=situation_type_memo,
+                    uploaded_files=uploaded_files_memo,
+                    valuation_mode=valuation_mode,
+                    parent_peers_raw = st.text_area(...),
+                    spinco_peers_raw = st.text_area(...),
+                    fmp_key=FMP_API_KEY
+                )
                 st.session_state.memo_path = memo_path
                 st.session_state.company_name = company_name_memo
                 st.session_state.situation_type = situation_type_memo
