@@ -25,7 +25,7 @@ DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 # Report & Infographic Structures
 # ==========================
 REPORT_TEMPLATES = {
-    "Spin-Off or Split-Up": """
+"Spin-Off or Split-Up": """
 Transaction Overview
 ParentCo and SpinCo details
 Rationale (regulatory, strategic unlock, valuation arbitrage)
@@ -37,10 +37,11 @@ SpinCo Investment Case
 Business model, growth drivers
 Historical and pro forma financials
 Independent valuation (e.g., Sum-of-the-Parts)
+Valuation Analysis
 Risks and Overhangs
 Forced selling, low float, governance concerns
 """,
-    "Mergers & Acquisitions": """
+"Mergers & Acquisitions": """
 Deal Summary
 Parties involved, consideration (cash/stock), premium
 Regulatory/antitrust/board approval status
@@ -58,7 +59,7 @@ Spread Analysis and Arbitrage Opportunity
 Deal spread
 IRR scenarios based on timing/risk
 """,
-    "Bankruptcy / Distressed / Restructuring": """
+"Bankruptcy / Distressed / Restructuring": """
 Situation Summary
 Cause of distress
 Filing date, jurisdiction, DIP terms
@@ -75,7 +76,7 @@ Exit multiples
 Catalysts and Legal Risks
 Judge approval, creditor objections, asset sales
 """,
-    "Activist Campaign": """
+"Activist Campaign": """
 Activist Background
 Fund profile, history, prior campaigns
 Campaign Details
@@ -89,7 +90,7 @@ Proxy fight implications
 Valuation Impact
 NPV of potential changes (e.g., spin-off value, ROIC uplift)
 """,
-    "Regulatory or Legal Catalyst": """
+"Regulatory or Legal Catalyst": """
 Legal/Regulatory Background
 Case/issue summary
 Historical legal proceedings
@@ -102,7 +103,7 @@ Revenue/EBITDA impact
 Market Reaction History (if any)
 Past similar cases
 """,
-    "Asset Sales or Carve-Outs": """
+"Asset Sales or Carve-Outs": """
 Transaction Overview
 Buyer, price, structure
 Valuation vs. book and peers
@@ -113,7 +114,7 @@ Debt repayment, dividends, buybacks, capex
 Re-rating Potential
 EBITDA margin uplift, return metrics
 """,
-    "Capital Raising or Buyback Catalyst": """
+"Capital Raising or Buyback Catalyst": """
 Transaction Mechanics
 Size, dilution, instrument type
 Capital Structure Post-Deal
@@ -196,7 +197,14 @@ def clean_markdown(text):
 def truncate_safely(text, limit=7000):
     return text[:limit]
 
-def generate_special_situation_note(company_name: str, situation_type: str, uploaded_files: list):
+def generate_special_situation_note(
+    company_name: str,
+    situation_type: str,
+    uploaded_files: list,
+    valuation_mode: str = None,
+    parent_peers: str = "",
+    spinco_peers: str = ""
+):
     combined_text = ""
     for file in uploaded_files:
         if file.name.endswith(".pdf"):
@@ -210,6 +218,30 @@ def generate_special_situation_note(company_name: str, situation_type: str, uplo
     if not structure:
         raise ValueError(f"Unsupported situation type: {situation_type}")
 
+    # --- Conditional Valuation Section for Spin-Offs ---
+    valuation_section = ""
+    if situation_type == "Spin-Off or Split-Up" and valuation_mode:
+        if valuation_mode == "I'll enter tickers":
+            valuation_section = f"""
+# Valuation Analysis
+The user has provided the following peer tickers:
+- ParentCo Peers: {parent_peers}
+- SpinCo Peers: {spinco_peers}
+
+Please fetch or approximate public LTM EV/EBITDA and P/E multiples for these peers.
+Then apply these multiples to the extracted LTM financials of ParentCo and SpinCo to estimate standalone valuations.
+Compare the sum of these to the pre-spin ParentCo's market cap to estimate the value unlock potential.
+"""
+        else:
+            valuation_section = """
+# Valuation Analysis
+Based on the business descriptions of ParentCo and SpinCo, identify 3–5 appropriate public peer companies for each.
+Then, estimate their LTM EV/EBITDA and P/E multiples, apply them to the extracted financials of ParentCo and SpinCo,
+and compute implied valuations. Finally, compare the combined value to the pre-spin ParentCo market cap and indicate
+the potential value unlock.
+"""
+
+    # --- Prompt Assembly ---
     prompt = f"""
 You are an institutional investment analyst writing a professional memo on a special situation involving {company_name}.
 The situation is: **{situation_type}**
@@ -217,10 +249,13 @@ The situation is: **{situation_type}**
 Below is the internal company information extracted from various files:
 \"\"\"{truncate_safely(combined_text)}\"\"\"
 
+{valuation_section}
+
 Using the structure below, generate a well-written investment memo. Be factual, insightful, and clear.
 Structure:
 {structure}
 """
+
     headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}"}
     payload = {
         "model": "deepseek-chat",
@@ -234,12 +269,13 @@ Structure:
 
     memo = clean_markdown(memo)
     memo_dict = split_into_sections(memo, structure)
-    
+
     doc = format_memo_docx(memo_dict, company_name, situation_type)
-    
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
         doc.save(tmp.name)
         return tmp.name
+
 
 def split_into_sections(text: str, template: str) -> Dict[str, str]:
     sections = {}
@@ -366,7 +402,7 @@ def build_infographic_html(company_name, sections):
 <body class="px-4 py-8 md:px-6 md:py-10 max-w-7xl mx-auto">
     <header class="text-center mb-12">
         <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-2">{company_name} – Investment Memo Infographic</h1>
-        <p class="text-sm text-gray-500">Generated by MaSh GenAI Platform</p>
+        <p class="text-sm text-gray-500">Generated by Aranca AI Platform</p>
     </header>
     <main class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 """
@@ -418,6 +454,23 @@ st.header("Step 1: Generate Investment Memo")
 
 company_name_memo = st.text_input("Enter Company Name", key="company_name_memo")
 situation_type_memo = st.selectbox("Select Situation Type", options=list(REPORT_TEMPLATES.keys()), key="situation_type_memo")
+use_valuation_model = False
+if situation_type_memo == "Spin-Off or Split-Up":
+    st.markdown("### 🔍 Valuation Module (Optional)")
+
+    valuation_mode = st.radio(
+        "Do you want to provide peer tickers for valuation, or let the model decide?",
+        options=["Let AI choose peers", "I'll enter tickers"],
+        key="valuation_mode"
+    )
+
+    if valuation_mode == "I'll enter tickers":
+        parent_peers = st.text_input("Enter ParentCo Peer Tickers (comma-separated)", key="parent_peers")
+        spinco_peers = st.text_input("Enter SpinCo Peer Tickers (comma-separated)", key="spinco_peers")
+    else:
+        st.info("AI will select peers using company descriptions and generate valuation logic automatically.")
+
+    use_valuation_model = True  # activate inside memo logic
 uploaded_files_memo = st.file_uploader("Upload Public Documents (PDF, DOCX)", accept_multiple_files=True, key="uploaded_files_memo")
 
 if st.button("Generate Memo"):
