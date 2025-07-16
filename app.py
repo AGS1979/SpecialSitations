@@ -219,6 +219,29 @@ def get_ev_ebitda_multiple(ticker: str, fmp_key: str) -> float:
         return 0.0
 
 
+def get_market_cap(ticker: str, fmp_key: str) -> float:
+    """Fetch current equity market cap from FMP profile endpoint."""
+    url = f"https://financialmodelingprep.com/api/v3/profile/{ticker}?apikey={fmp_key}"
+    r = requests.get(url); r.raise_for_status()
+    data = r.json()
+    return float(data[0].get("mktCap", 0))
+
+def get_net_debt(ticker: str, fmp_key: str) -> float:
+    """Fetch net debt from FMP key metrics."""
+    url = f"https://financialmodelingprep.com/api/v3/key-metrics-ttm/{ticker}?apikey={fmp_key}"
+    r = requests.get(url); r.raise_for_status()
+    km = r.json()[0]
+    # FMP returns netDebt = totalDebt – cash
+    return float(km.get("netDebt", 0))
+
+def get_ttm_ebitda(ticker: str, fmp_key: str) -> float:
+    """Fetch TTM EBITDA from FMP key metrics."""
+    url = f"https://financialmodelingprep.com/api/v3/key-metrics-ttm/{ticker}?apikey={fmp_key}"
+    r = requests.get(url); r.raise_for_status()
+    km = r.json()[0]
+    return float(km.get("ebitdaTTM", km.get("ebitda", 0)))
+
+
 def clean_markdown(text):
     text = re.sub(r'^[ \t\-]{3,}$', '', text, flags=re.MULTILINE)   # drop lines of --- or ***  
     text = re.sub(r'#+\s*', '', text)
@@ -242,8 +265,8 @@ def generate_special_situation_note(
     parent_peers: str = "",
     spinco_peers: str = "",
     fmp_key: str = ""
-
 ):
+    # 1) Pull in all text
     combined_text = ""
     for file in uploaded_files:
         if file.name.endswith(".pdf"):
@@ -253,27 +276,74 @@ def generate_special_situation_note(
         else:
             combined_text += f"[Unsupported file: {file.name}]\n"
 
+    # 2) Ensure we have a template
     structure = REPORT_TEMPLATES.get(situation_type)
     if not structure:
         raise ValueError(f"Unsupported situation type: {situation_type}")
 
-    # --- Conditional Valuation Section for Spin-Offs ---
+    # 3) Build valuation_section only for spin‑offs
     valuation_section = ""
     if situation_type == "Spin-Off or Split-Up" and valuation_mode:
 
+        # Helper for user‑entered peers
         def process_peers(raw: str):
-            names = [n.strip() for n in raw.split(",") if n.strip()]
-            tickers = [resolve_company_to_ticker(n) for n in names]
+            names     = [n.strip() for n in raw.split(",") if n.strip()]
+            tickers   = [resolve_company_to_ticker(n) for n in names]
             multiples = [get_ev_ebitda_multiple(t, fmp_key) for t in tickers if t]
-            avg_multiple = round(sum(multiples) / len(multiples), 2) if multiples else None
-            return names, tickers, multiples, avg_multiple
+            avg_mult  = round(sum(multiples) / len(multiples), 2) if multiples else None
+            return names, tickers, multiples, avg_mult
 
-    if valuation_mode == "I'll enter peer company names":
-        parent_names, parent_tickers, parent_mults, parent_avg = process_peers(parent_peers)
-        spinco_names, spinco_tickers, spinco_mults, spinco_avg = process_peers(spinco_peers)
+        if valuation_mode == "Let AI choose peers":
+            # --- AI‑selected peers + true SOTP ---
+            peer_prompt = (
+                f"List 5 large, publicly-traded companies most comparable to {company_name}, "
+                "across its automation and aerospace segments, separated by commas."
+            )
+            ai_res = requests.post(
+                DEEPSEEK_API_URL,
+                headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}"},
+                json={
+                    "model": "deepseek-chat",
+                    "messages": [{"role": "user", "content": peer_prompt}],
+                    "temperature": 0
+                }
+            ).json()
+            peer_names   = [n.strip() for n in ai_res["choices"][0]["message"]["content"].split(",")]
+            peer_tickers = [resolve_company_to_ticker(n) for n in peer_names]
+            peer_mults   = [get_ev_ebitda_multiple(t, fmp_key) for t in peer_tickers]
+            avg_mult     = round(sum(peer_mults)/len(peer_mults), 2)
 
+            # Fetch Honeywell’s own numbers
+            company_ticker = resolve_company_to_ticker(company_name)
+            company_ebitda = get_ttm_ebitda(company_ticker, fmp_key)
+            est_ev         = avg_mult * company_ebitda
+            net_debt       = get_net_debt(company_ticker, fmp_key)
+            est_equity     = est_ev - net_debt
+            actual_mc      = get_market_cap(company_ticker, fmp_key)
+            upside_pct     = (est_equity / actual_mc - 1) * 100
 
-        valuation_section = f"""
+            valuation_section = f"""
+# Valuation Analysis
+
+**AI‑Selected Peers**: {', '.join(peer_names)}  
+**Tickers**: {', '.join(peer_tickers)}  
+**Peer EV/EBITDA multiples**: {peer_mults}  
+**Average EV/EBITDA**: {avg_mult}  
+
+**{company_name} TTM EBITDA**: ${company_ebitda:,.0f} mm  
+**Estimated Enterprise Value**: {avg_mult}×{company_ebitda:,.0f} = ${est_ev:,.0f} mm  
+**Net Debt**: ${net_debt:,.0f} mm  
+**Implied Equity Value**: ${est_equity:,.0f} mm  
+
+**Actual Market Cap**: ${actual_mc:,.0f} mm  
+**Implied Upside**: {upside_pct:.1f}%  
+"""
+        elif valuation_mode == "I'll enter peer company names":
+            # --- user‑entered peers path ---
+            parent_names, parent_tickers, parent_mults, parent_avg = process_peers(parent_peers)
+            spinco_names, spinco_tickers, spinco_mults, spinco_avg = process_peers(spinco_peers)
+
+            valuation_section = f"""
 # Valuation Analysis
 
 Peer companies provided by user:
@@ -290,15 +360,17 @@ EV/EBITDA multiples: {spinco_mults}
 
 Using the above, estimate SpinCo and ParentCo valuations by applying the average multiples to their respective TTM EBITDA extracted from the docs.
 """
-    else:
-        valuation_section = """
+        else:
+            # --- generic fallback ---
+            valuation_section = """
 # Valuation Analysis
 
-Identify relevant peers for ParentCo and SpinCo based on business similarity. Fetch their LTM EV/EBITDA multiples from public data and compute average for each set. Multiply with extracted TTM EBITDA to derive standalone valuations and compare sum with ParentCo market cap to assess value unlock.
+Identify relevant peers for ParentCo and SpinCo based on business similarity. 
+Fetch their LTM EV/EBITDA multiples from public data and compute average for each set. 
+Multiply with extracted TTM EBITDA to derive standalone valuations and compare sum with ParentCo market cap to assess value unlock.
 """
 
-
-    # --- Prompt Assembly ---
+    # 4) Assemble the LLM prompt
     prompt = f"""
 You are an institutional investment analyst writing a professional memo on a special situation involving {company_name}.
 The situation is: **{situation_type}**
@@ -306,30 +378,24 @@ The situation is: **{situation_type}**
 Below is the internal company information extracted from various files:
 \"\"\"{truncate_safely(combined_text)}\"\"\"
 
-**Instructions for each section**:
-– Write at least **3–4 sentences** (one short paragraph) per bullet in the structure.  
-– Provide **quantitative context** (e.g. revenue figures, leverage ratios) and **qualitative insight** (strategy, competitive dynamics).  
-– Use **clear headings**, **no dashed lines**, and avoid one‑line bullets—aim for mini‑paragraphs.
+{valuation_section}
 
+Using the structure below, generate a well-written investment memo. Be factual, insightful, and clear.
 Structure:
 {structure}
 """
 
-
-    headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}"}
-    payload = {
-        "model": "deepseek-chat",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.3
-    }
-
-    response = requests.post(DEEPSEEK_API_URL, headers=headers, json=payload)
+    # 5) Call DeepSeek
+    response = requests.post(
+        DEEPSEEK_API_URL,
+        headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}"},
+        json={"model": "deepseek-chat", "messages": [{"role": "user", "content": prompt}], "temperature": 0.3}
+    )
     response.raise_for_status()
-    memo = response.json()["choices"][0]["message"]["content"]
+    memo = clean_markdown(response.json()["choices"][0]["message"]["content"])
 
-    memo = clean_markdown(memo)
+    # 6) Split & format into Word
     memo_dict = split_into_sections(memo, structure)
-
     doc = format_memo_docx(memo_dict, company_name, situation_type)
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
