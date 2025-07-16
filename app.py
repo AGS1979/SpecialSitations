@@ -10,6 +10,7 @@ from docx.shared import Inches, Pt
 import tempfile
 import base64
 import yfinance as yf
+from typing import List, Dict, Tuple
 
 
 # ========== CONFIG ==========
