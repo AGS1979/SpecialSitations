@@ -549,8 +549,8 @@ if st.button("Generate Memo"):
                     situation_type=situation_type_memo,
                     uploaded_files=uploaded_files_memo,
                     valuation_mode=valuation_mode,
-                    parent_peers_raw = st.text_area(...),
-                    spinco_peers_raw = st.text_area(...),
+                    parent_peers_raw = parent_peers_raw,
+                    spinco_peers_raw = spinco_peers_raw,
                     fmp_key=FMP_API_KEY
                 )
                 st.session_state.memo_path = memo_path
