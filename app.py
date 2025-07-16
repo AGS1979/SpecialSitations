@@ -266,7 +266,7 @@ def generate_special_situation_note(
     spinco_peers: str = "",
     fmp_key: str = ""
 ):
-    # 1) Pull in all text
+    # 1) Extract text from uploads
     combined_text = ""
     for file in uploaded_files:
         if file.name.endswith(".pdf"):
@@ -276,51 +276,59 @@ def generate_special_situation_note(
         else:
             combined_text += f"[Unsupported file: {file.name}]\n"
 
-    # 2) Ensure we have a template
+    # 2) Grab the right template
     structure = REPORT_TEMPLATES.get(situation_type)
     if not structure:
         raise ValueError(f"Unsupported situation type: {situation_type}")
 
-    # 3) Build valuation_section only for spin‑offs
+    # 3) Only spin‑offs get valuation logic
     valuation_section = ""
     if situation_type == "Spin-Off or Split-Up" and valuation_mode:
 
-        # Helper for user‑entered peers
+        # helper that never returns None multipliers
         def process_peers(raw: str):
-            names     = [n.strip() for n in raw.split(",") if n.strip()]
-            tickers   = [resolve_company_to_ticker(n) for n in names]
-            multiples = [get_ev_ebitda_multiple(t, fmp_key) for t in tickers if t]
-            avg_mult  = round(sum(multiples) / len(multiples), 2) if multiples else None
-            return names, tickers, multiples, avg_mult
+            names   = [n.strip() for n in raw.split(",") if n.strip()]
+            tickers = [resolve_company_to_ticker(n) for n in names]
+            mults   = []
+            for t in tickers:
+                if not t:
+                    continue
+                m = get_ev_ebitda_multiple(t, fmp_key)
+                if isinstance(m, (int, float)):
+                    mults.append(m)
+            avg = round(sum(mults) / len(mults), 2) if mults else None
+            return names, tickers, mults, avg
 
         if valuation_mode == "Let AI choose peers":
-            # --- AI‑selected peers + true SOTP ---
+            # Ask the LLM for peers
             peer_prompt = (
                 f"List 5 large, publicly-traded companies most comparable to {company_name}, "
                 "across its automation and aerospace segments, separated by commas."
             )
-            ai_res = requests.post(
+            res = requests.post(
                 DEEPSEEK_API_URL,
                 headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}"},
                 json={
-                    "model": "deepseek-chat",
-                    "messages": [{"role": "user", "content": peer_prompt}],
-                    "temperature": 0
+                  "model": "deepseek-chat",
+                  "messages": [{"role":"user", "content": peer_prompt}],
+                  "temperature": 0
                 }
             ).json()
-            peer_names   = [n.strip() for n in ai_res["choices"][0]["message"]["content"].split(",")]
-            peer_tickers = [resolve_company_to_ticker(n) for n in peer_names]
-            peer_mults   = [get_ev_ebitda_multiple(t, fmp_key) for t in peer_tickers]
-            avg_mult     = round(sum(peer_mults)/len(peer_mults), 2)
+            peer_names = [n.strip() for n in res["choices"][0]["message"]["content"].split(",")]
+            # filter out any None tickers
+            peer_tickers = [resolve_company_to_ticker(n) for n in peer_names if resolve_company_to_ticker(n)]
+            raw_mults     = [get_ev_ebitda_multiple(t, fmp_key) for t in peer_tickers]
+            peer_mults    = [m for m in raw_mults if isinstance(m, (int, float))]
+            avg_mult      = round(sum(peer_mults)/len(peer_mults),2) if peer_mults else None
 
-            # Fetch Honeywell’s own numbers
-            company_ticker = resolve_company_to_ticker(company_name)
-            company_ebitda = get_ttm_ebitda(company_ticker, fmp_key)
-            est_ev         = avg_mult * company_ebitda
-            net_debt       = get_net_debt(company_ticker, fmp_key)
-            est_equity     = est_ev - net_debt
-            actual_mc      = get_market_cap(company_ticker, fmp_key)
-            upside_pct     = (est_equity / actual_mc - 1) * 100
+            # Pull Honeywell’s own stats
+            ticker        = resolve_company_to_ticker(company_name)
+            ebitda        = get_ttm_ebitda(ticker, fmp_key) or 0
+            ev_est        = (avg_mult or 0) * ebitda
+            debt          = get_net_debt(ticker, fmp_key) or 0
+            equity_est    = ev_est - debt
+            actual_mc     = get_market_cap(ticker, fmp_key) or 0
+            upside        = ((equity_est/actual_mc)-1)*100 if actual_mc else None
 
             valuation_section = f"""
 # Valuation Analysis
@@ -328,49 +336,48 @@ def generate_special_situation_note(
 **AI‑Selected Peers**: {', '.join(peer_names)}  
 **Tickers**: {', '.join(peer_tickers)}  
 **Peer EV/EBITDA multiples**: {peer_mults}  
-**Average EV/EBITDA**: {avg_mult}  
+**Average EV/EBITDA**: {avg_mult or 'N/A'}  
 
-**{company_name} TTM EBITDA**: ${company_ebitda:,.0f} mm  
-**Estimated Enterprise Value**: {avg_mult}×{company_ebitda:,.0f} = ${est_ev:,.0f} mm  
-**Net Debt**: ${net_debt:,.0f} mm  
-**Implied Equity Value**: ${est_equity:,.0f} mm  
+**{company_name} TTM EBITDA**: ${ebitda:,.0f} mm  
+**Estimated Enterprise Value**: {avg_mult or 0}×{ebitda:,.0f} = ${ev_est:,.0f} mm  
+**Net Debt**: ${debt:,.0f} mm  
+**Implied Equity Value**: ${equity_est:,.0f} mm  
 
 **Actual Market Cap**: ${actual_mc:,.0f} mm  
-**Implied Upside**: {upside_pct:.1f}%  
+**Implied Upside**: {f"{upside:.1f}%" if upside is not None else 'N/A'}  
 """
         elif valuation_mode == "I'll enter peer company names":
-            # --- user‑entered peers path ---
-            parent_names, parent_tickers, parent_mults, parent_avg = process_peers(parent_peers)
-            spinco_names, spinco_tickers, spinco_mults, spinco_avg = process_peers(spinco_peers)
+            # user‑entered peers
+            p_names, p_tickers, p_mults, p_avg = process_peers(parent_peers)
+            s_names, s_tickers, s_mults, s_avg = process_peers(spinco_peers)
 
             valuation_section = f"""
 # Valuation Analysis
 
 Peer companies provided by user:
 
-**ParentCo Peers**: {', '.join(parent_names)}  
-Tickers: {', '.join(parent_tickers)}  
-EV/EBITDA multiples: {parent_mults}  
-**Average EV/EBITDA**: {parent_avg or 'N/A'}
+**ParentCo Peers**: {', '.join(p_names)}  
+Tickers: {', '.join(p_tickers)}  
+EV/EBITDA multiples: {p_mults}  
+**Average EV/EBITDA**: {p_avg or 'N/A'}
 
-**SpinCo Peers**: {', '.join(spinco_names)}  
-Tickers: {', '.join(spinco_tickers)}  
-EV/EBITDA multiples: {spinco_mults}  
-**Average EV/EBITDA**: {spinco_avg or 'N/A'}
+**SpinCo Peers**: {', '.join(s_names)}  
+Tickers: {', '.join(s_tickers)}  
+EV/EBITDA multiples: {s_mults}  
+**Average EV/EBITDA**: {s_avg or 'N/A'}
 
-Using the above, estimate SpinCo and ParentCo valuations by applying the average multiples to their respective TTM EBITDA extracted from the docs.
+Using these figures, apply the averages to the TTM EBITDA from the docs to get standalone valuations, then compare to ParentCo’s market cap for the unlock.
 """
         else:
-            # --- generic fallback ---
+            # generic fallback
             valuation_section = """
 # Valuation Analysis
 
-Identify relevant peers for ParentCo and SpinCo based on business similarity. 
-Fetch their LTM EV/EBITDA multiples from public data and compute average for each set. 
-Multiply with extracted TTM EBITDA to derive standalone valuations and compare sum with ParentCo market cap to assess value unlock.
+Identify relevant peers for ParentCo and SpinCo based on business similarity.  
+Fetch their LTM EV/EBITDA multiples from public data, compute averages, and multiply by TTM EBITDA to derive standalone valuations for a SOTP comparison.
 """
 
-    # 4) Assemble the LLM prompt
+    # 4) Build the final prompt
     prompt = f"""
 You are an institutional investment analyst writing a professional memo on a special situation involving {company_name}.
 The situation is: **{situation_type}**
@@ -385,22 +392,23 @@ Structure:
 {structure}
 """
 
-    # 5) Call DeepSeek
-    response = requests.post(
+    # 5) LLM call
+    res = requests.post(
         DEEPSEEK_API_URL,
         headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}"},
-        json={"model": "deepseek-chat", "messages": [{"role": "user", "content": prompt}], "temperature": 0.3}
+        json={"model":"deepseek-chat","messages":[{"role":"user","content":prompt}],"temperature":0.3}
     )
-    response.raise_for_status()
-    memo = clean_markdown(response.json()["choices"][0]["message"]["content"])
+    res.raise_for_status()
+    memo = clean_markdown(res.json()["choices"][0]["message"]["content"])
 
-    # 6) Split & format into Word
+    # 6) Split into sections and build the DOCX
     memo_dict = split_into_sections(memo, structure)
     doc = format_memo_docx(memo_dict, company_name, situation_type)
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
         doc.save(tmp.name)
         return tmp.name
+
 
 
 def split_into_sections(text: str, template: str) -> Dict[str, str]:
