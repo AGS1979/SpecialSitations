@@ -232,7 +232,7 @@ def get_net_debt(ticker: str, fmp_key: str) -> float:
     Uses /balance-sheet-statement endpoint (limit=1).
     """
     try:
-        url = f"https://financialmodelingprep.com/api/v3/balance-sheet-statement/{ticker}?limit=1&apikey={fmp_key}"
+        url = f"https://financialmodelingprep.com/api/v3/balance-sheet-statement/{ticker}?period=quarter&apikey={fmp_key}"
         r = requests.get(url)
         r.raise_for_status()
         data = r.json()
@@ -252,7 +252,7 @@ def get_ttm_ebitda(ticker: str, fmp_key: str) -> float:
     Uses /income-statement endpoint (limit=1).
     """
     try:
-        url = f"https://financialmodelingprep.com/api/v3/income-statement/{ticker}?limit=1&apikey={fmp_key}"
+        url = f"https://financialmodelingprep.com/api/v3/income-statement/{ticker}?period=quarter&apikey={fmp_key}"
         r = requests.get(url)
         r.raise_for_status()
         data = r.json()
