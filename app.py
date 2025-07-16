@@ -227,19 +227,43 @@ def get_market_cap(ticker: str, fmp_key: str) -> float:
     return float(data[0].get("mktCap", 0))
 
 def get_net_debt(ticker: str, fmp_key: str) -> float:
-    """Fetch net debt from FMP key metrics."""
-    url = f"https://financialmodelingprep.com/api/v3/key-metrics-ttm/{ticker}?apikey={fmp_key}"
-    r = requests.get(url); r.raise_for_status()
-    km = r.json()[0]
-    # FMP returns netDebt = totalDebt – cash
-    return float(km.get("netDebt", 0))
+    """
+    Fetch net debt = totalDebt – cash from the latest Balance Sheet.
+    Uses /balance-sheet-statement endpoint (limit=1).
+    """
+    try:
+        url = f"https://financialmodelingprep.com/api/v3/balance-sheet-statement/{ticker}?limit=1&apikey={fmp_key}"
+        r = requests.get(url)
+        r.raise_for_status()
+        data = r.json()
+        if isinstance(data, list) and data:
+            bs = data[0]
+            total_debt = float(bs.get("totalDebt", 0))
+            # FMP field for cash may vary; try both
+            cash = float(bs.get("cashAndCashEquivalents", 0) or bs.get("cashAndShortTermInvestments", 0) or 0)
+            return total_debt - cash
+    except Exception:
+        pass
+    return 0.0
 
 def get_ttm_ebitda(ticker: str, fmp_key: str) -> float:
-    """Fetch TTM EBITDA from FMP key metrics."""
-    url = f"https://financialmodelingprep.com/api/v3/key-metrics-ttm/{ticker}?apikey={fmp_key}"
-    r = requests.get(url); r.raise_for_status()
-    km = r.json()[0]
-    return float(km.get("ebitdaTTM", km.get("ebitda", 0)))
+    """
+    Fetch the most recent TTM EBITDA from the Income Statement.
+    Uses /income-statement endpoint (limit=1).
+    """
+    try:
+        url = f"https://financialmodelingprep.com/api/v3/income-statement/{ticker}?limit=1&apikey={fmp_key}"
+        r = requests.get(url)
+        r.raise_for_status()
+        data = r.json()
+        if isinstance(data, list) and data:
+            inc = data[0]
+            # FMP returns 'ebitda' in the income statement
+            return float(inc.get("ebitda", 0))
+    except Exception:
+        pass
+    return 0.0
+
 
 
 def clean_markdown(text):
