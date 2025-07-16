@@ -220,6 +220,7 @@ def get_ev_ebitda_multiple(ticker: str, fmp_key: str) -> float:
 
 
 def clean_markdown(text):
+    text = re.sub(r'^[ \t\-]{3,}$', '', text, flags=re.MULTILINE)   # drop lines of --- or ***  
     text = re.sub(r'#+\s*', '', text)
     text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
     text = re.sub(r'\*(.*?)\*', r'\1', text)
@@ -305,9 +306,11 @@ The situation is: **{situation_type}**
 Below is the internal company information extracted from various files:
 \"\"\"{truncate_safely(combined_text)}\"\"\"
 
-{valuation_section}
+**Instructions for each section**:
+– Write at least **3–4 sentences** (one short paragraph) per bullet in the structure.  
+– Provide **quantitative context** (e.g. revenue figures, leverage ratios) and **qualitative insight** (strategy, competitive dynamics).  
+– Use **clear headings**, **no dashed lines**, and avoid one‑line bullets—aim for mini‑paragraphs.
 
-Using the structure below, generate a well-written investment memo. Be factual, insightful, and clear.
 Structure:
 {structure}
 """
@@ -375,13 +378,14 @@ def format_memo_docx(memo_dict: dict, company_name: str, situation_type: str):
         run = heading.add_run(section_title)
         run.bold = True
         run.font.size = Pt(14)
+        heading.paragraph_format.space_after = Pt(6)    # heading‑to‑text gap
         for para in content.strip().split('\n\n'):
             if para.strip():
                 p = doc.add_paragraph(para.strip())
-                p.paragraph_format.space_after = Pt(10)
-                p.paragraph_format.line_spacing = 1.5
-        doc.add_paragraph()
-
+                p.paragraph_format.space_before = Pt(0)
+                p.paragraph_format.space_after  = Pt(6)    # tighten between paras
+                p.paragraph_format.line_spacing = 1.3
+        
     section = doc.sections[0]
     section.left_margin = Inches(0.75)
     section.right_margin = Inches(0.75)
