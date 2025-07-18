@@ -562,7 +562,7 @@ def build_infographic_html(company_name, sections):
     html += """
     </main>
     <footer class="text-center mt-12">
-        <p class="text-xs text-gray-400">This document is for informational purposes only. Not investment advice.</p>
+        <p class="text-xs text-gray-400">This document is for informational purposes only. Not an investment advice.</p>
     </footer>
 </body>
 </html>
@@ -585,7 +585,11 @@ st.header("Step 1: Generate Investment Memo")
 
 company_name_memo = st.text_input("Enter Company Name", key="company_name_memo")
 situation_type_memo = st.selectbox("Select Situation Type", options=list(REPORT_TEMPLATES.keys()), key="situation_type_memo")
-use_valuation_model = False
+valuation_mode = None   # ← make sure it always exists
+parent_peers_raw = ""
+spinco_peers_raw = ""
+
+
 if situation_type_memo == "Spin-Off or Split-Up":
     st.markdown("### 🔍 Valuation Module (Optional)")
 
@@ -595,8 +599,7 @@ if situation_type_memo == "Spin-Off or Split-Up":
         key="valuation_mode"
     )
 
-    parent_peers_raw = ""
-    spinco_peers_raw = ""
+    
 
     if valuation_mode == "I'll enter peer company names":
         parent_peers_raw = st.text_area("Enter ParentCo Peer Company Names (comma-separated)", key="parent_peers_raw")
@@ -605,7 +608,7 @@ if situation_type_memo == "Spin-Off or Split-Up":
     else:
         st.info("AI will select peers using company descriptions and generate valuation logic automatically.")
 
-    use_valuation_model = True  # activate inside memo logic
+
 uploaded_files_memo = st.file_uploader("Upload Public Documents (PDF, DOCX)", accept_multiple_files=True, key="uploaded_files_memo")
 
 if st.button("Generate Memo"):
