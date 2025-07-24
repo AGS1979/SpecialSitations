@@ -167,7 +167,14 @@ logo_base64 = get_base64_logo()
 st.markdown(f"""
     <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; margin-bottom: 1.5rem;">
         <img src="data:image/png;base64,{logo_base64}" style="height: 36px; width: auto;" />
-        
+        <div style="margin-left: 2px;">
+            <h1 style="font-size: 1.6rem; font-weight: 800; color: #1F2937; margin-bottom: 0.2rem;">
+                Pre-IPO Investment Memo Generator
+            </h1>
+            <p style="font-size: 1rem; color: #4B5563; margin-top: 0;">
+                Upload an IPO/DRHP PDF to generate a structured investment memo with optional Q&A.
+            </p>
+        </div>
     </div>
 """, unsafe_allow_html=True)
 
@@ -574,15 +581,6 @@ def build_infographic_html(company_name, sections):
 # ==========================
 
 st.set_page_config(page_title="Special Situation Memo & Infographic Generator", layout="wide")
-
-st.markdown("""
-    <style>
-      /* bump the whole app down so the logo isn’t clipped */
-      [data-testid="stAppViewContainer"] {
-        padding-top: 2rem;  /* or try 3rem if you still see clipping */
-      }
-    </style>
-""", unsafe_allow_html=True)
 
 st.title("📝 Special Situation Memo & Infographic Generator")
 st.markdown("---")
