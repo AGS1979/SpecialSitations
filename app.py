@@ -12,6 +12,31 @@ import base64
 import yfinance as yf
 from typing import List, Dict, Tuple
 
+# 1️⃣ Must come first, before any st.* calls:
+st.set_page_config(page_title="Special Situation Memo & Infographic Generator", layout="wide")
+
+# 2️⃣ Immediately inject the new padding. 
+# We're targeting the container that holds all blocks in the main view.
+st.markdown(
+    """
+    <style>
+      /* force extra top‐padding for the entire app canvas */
+      [data-testid="stAppViewContainer"] .main .block-container {
+        padding-top: 2rem !important;
+      }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# now your Base64‐logo header
+logo_base64 = get_base64_logo()
+st.markdown(f"""
+  <div style="display:flex; flex-direction:column; align-items:flex-start; gap:0.5rem; margin-bottom:1.5rem;">
+    <img src="data:image/png;base64,{logo_base64}" style="height:36px; width:auto;"/>
+    <!-- …etc… -->
+  </div>
+""", unsafe_allow_html=True)
 
 # ========== CONFIG ==========
 try:
@@ -584,14 +609,7 @@ st.markdown("""
   </style>
 """, unsafe_allow_html=True)
 
-# now your Base64‐logo header
-logo_base64 = get_base64_logo()
-st.markdown(f"""
-  <div style="display:flex; flex-direction:column; align-items:flex-start; gap:0.5rem; margin-bottom:1.5rem;">
-    <img src="data:image/png;base64,{logo_base64}" style="height:36px; width:auto;"/>
-    <!-- …etc… -->
-  </div>
-""", unsafe_allow_html=True)
+
 
 st.title("📝 Special Situation Memo & Infographic Generator")
 st.markdown("---")
