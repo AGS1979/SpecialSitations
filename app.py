@@ -582,6 +582,43 @@ def build_infographic_html(company_name, sections):
 
 st.set_page_config(page_title="Special Situation Memo & Infographic Generator", layout="wide")
 
+st.markdown("""
+  <style>
+    footer:after {content:'' !important; display:none !important;}
+    #MainMenu {visibility: visible;}
+    header {visibility: visible;}
+
+    html, body, [class*="css"] {
+      font-family: 'Segoe UI', sans-serif;
+      color: #222;
+      background-color: #f9f9f9;
+    }
+
+    /* ← add this exactly as in your InvMemo app */
+    .block-container {
+      padding-top: 1rem;
+      padding-left: 2rem;
+      padding-right: 2rem;
+    }
+
+    h1, h2, h3 {
+      color: #00416A;
+      margin-bottom: 0.25rem;
+    }
+
+    /* ...any other global overrides you need... */
+  </style>
+""", unsafe_allow_html=True)
+
+# now your Base64‐logo header
+logo_base64 = get_base64_logo()
+st.markdown(f"""
+  <div style="display:flex; flex-direction:column; align-items:flex-start; gap:0.5rem; margin-bottom:1.5rem;">
+    <img src="data:image/png;base64,{logo_base64}" style="height:36px; width:auto;"/>
+    <!-- …etc… -->
+  </div>
+""", unsafe_allow_html=True)
+
 st.title("📝 Special Situation Memo & Infographic Generator")
 st.markdown("---")
 
