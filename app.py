@@ -575,6 +575,15 @@ def build_infographic_html(company_name, sections):
 
 st.set_page_config(page_title="Special Situation Memo & Infographic Generator", layout="wide")
 
+st.markdown("""
+    <style>
+      /* bump the whole app down so the logo isn’t clipped */
+      [data-testid="stAppViewContainer"] {
+        padding-top: 2rem;  /* or try 3rem if you still see clipping */
+      }
+    </style>
+""", unsafe_allow_html=True)
+
 st.title("📝 Special Situation Memo & Infographic Generator")
 st.markdown("---")
 
