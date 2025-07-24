@@ -15,18 +15,13 @@ from typing import List, Dict, Tuple
 # 1️⃣ Must come first, before any st.* calls:
 st.set_page_config(page_title="Special Situation Memo & Infographic Generator", layout="wide")
 
-# 2️⃣ Immediately inject the new padding. 
+# 2️⃣ Immediately inject the new padding.
 # We're targeting the container that holds all blocks in the main view.
-# 2️⃣ One unified CSS block, full‑page padding:
 st.markdown("""
     <style>
-      /* Correctly apply PADDING to push content down inside the container */
+      /* Increase padding to push content down from under the header */
       [data-testid="stAppViewContainer"] {
-        padding-top: 0rem !important; /* Adjust this value as needed */
-      }
-      /* Optional: Adjust the main header if you still need it */
-      header {
-        padding: 1rem 2rem !important;
+          padding-top: 2.5rem !important;
       }
     </style>
 """, unsafe_allow_html=True)
@@ -38,11 +33,20 @@ def get_base64_logo(path="logo.png"):
 # now your Base64‐logo header
 logo_base64 = get_base64_logo()
 st.markdown(f"""
-  <div style="display:flex; flex-direction:column; align-items:flex-start; gap:0.5rem; margin-bottom:1.5rem;">
-    <img src="data:image/png;base64,{logo_base64}" style="height:36px; width:auto; margin-top:0.5rem;"/>
-    <!-- …etc… -->
+  <div style="display:flex; flex-direction:column; align-items:flex-start; gap:0.5rem; margin-bottom:1.5rem; margin-top: -2rem;">
+    <img src="data:image/png;base64,{logo_base64}" style="height:36px; width:auto;"/>
   </div>
 """, unsafe_allow_html=True)
+
+
+# Change the title to a subheader for better spacing
+st.subheader("Pre-IPO Investment Memo Generator")
+st.write("Upload an IPO/DRHP PDF to generate a structured investment memo with optional Q&A.")
+
+# Remove the default title if you want to use the subheader instead
+# st.title("📝 Special Situation Memo & Infographic Generator")
+
+# The rest of your code follows...
 
 # ========== CONFIG ==========
 try:
