@@ -22,7 +22,7 @@ st.markdown("""
   <style>
     /* give the entire app canvas breathing room for a 36px logo */
     html, body {
-      padding-top: 2.5rem !important;
+      padding-top: 3rem !important;
     }
     footer:after { content: none !important; }
     #MainMenu, header { visibility: visible; }
