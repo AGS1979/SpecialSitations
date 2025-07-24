@@ -62,10 +62,6 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
-# --- Your App's Content Starts Here ---
-
-st.title("Pre-IPO Investment Memo Generator")
-st.write("Upload an IPO/DRHP PDF to generate a structured investment memo with optional Q&A.")
 
 # ========== CONFIG ==========
 try:
@@ -610,8 +606,6 @@ def build_infographic_html(company_name, sections):
 
 st.title("📝 Special Situation Memo & Infographic Generator")
 st.markdown("---")
-
-st.sidebar.info("API key loaded from secrets.")
 
 # --- Step 1: Memo Generation ---
 st.header("Step 1: Generate Investment Memo")
