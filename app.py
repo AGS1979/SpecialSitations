@@ -17,23 +17,40 @@ st.set_page_config(page_title="Special Situation Memo & Infographic Generator", 
 
 # 2️⃣ Immediately inject the new padding. 
 # We're targeting the container that holds all blocks in the main view.
-st.markdown(
-    """
-    <style>
-      /* force extra top‐padding for the entire app canvas */
-      [data-testid="stAppViewContainer"] .main .block-container {
-        padding-top: 2rem !important;
-      }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# 2️⃣ One unified CSS block, full‑page padding:
+st.markdown("""
+  <style>
+    /* give the entire app canvas breathing room for a 36px logo */
+    html, body {
+      padding-top: 2.5rem !important;
+    }
+    footer:after { content: none !important; }
+    #MainMenu, header { visibility: visible; }
+    html, body, [class*="css"] {
+      font-family: 'Segoe UI', sans-serif;
+      color: #222;
+      background-color: #f9f9f9;
+    }
+    h1, h2, h3 {
+      color: #00416A;
+      margin-bottom: 0.25rem;
+    }
+    .stButton>button {
+      background-color: #00416A; color: white; font-weight: bold; border-radius: 6px;
+    }
+    /* any other global overrides… */
+  </style>
+""", unsafe_allow_html=True)
+
+def get_base64_logo(path="logo.png"):
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
 
 # now your Base64‐logo header
 logo_base64 = get_base64_logo()
 st.markdown(f"""
   <div style="display:flex; flex-direction:column; align-items:flex-start; gap:0.5rem; margin-bottom:1.5rem;">
-    <img src="data:image/png;base64,{logo_base64}" style="height:36px; width:auto;"/>
+    <img src="data:image/png;base64,{logo_base64}" style="height:36px; width:auto; margin-top:0.5rem;"/>
     <!-- …etc… -->
   </div>
 """, unsafe_allow_html=True)
@@ -578,38 +595,6 @@ def build_infographic_html(company_name, sections):
 # ==========================
 # Streamlit App UI
 # ==========================
-
-st.set_page_config(page_title="Special Situation Memo & Infographic Generator", layout="wide")
-
-st.markdown("""
-  <style>
-    footer:after {content:'' !important; display:none !important;}
-    #MainMenu {visibility: visible;}
-    header {visibility: visible;}
-
-    html, body, [class*="css"] {
-      font-family: 'Segoe UI', sans-serif;
-      color: #222;
-      background-color: #f9f9f9;
-    }
-
-    /* ← add this exactly as in your InvMemo app */
-    .block-container {
-      padding-top: 1rem;
-      padding-left: 2rem;
-      padding-right: 2rem;
-    }
-
-    h1, h2, h3 {
-      color: #00416A;
-      margin-bottom: 0.25rem;
-    }
-
-    /* ...any other global overrides you need... */
-  </style>
-""", unsafe_allow_html=True)
-
-
 
 st.title("📝 Special Situation Memo & Infographic Generator")
 st.markdown("---")
