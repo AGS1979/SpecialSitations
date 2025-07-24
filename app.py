@@ -12,41 +12,60 @@ import base64
 import yfinance as yf
 from typing import List, Dict, Tuple
 
-# 1️⃣ Must come first, before any st.* calls:
-st.set_page_config(page_title="Special Situation Memo & Infographic Generator", layout="wide")
-
-# 2️⃣ Immediately inject the new padding.
-# We're targeting the container that holds all blocks in the main view.
-st.markdown("""
-    <style>
-      /* Increase padding to push content down from under the header */
-      [data-testid="stAppViewContainer"] {
-          padding-top: 2.5rem !important;
-      }
-    </style>
-""", unsafe_allow_html=True)
+# --- Must be the first st.* command ---
+st.set_page_config(page_title="Pre-IPO Memo Generator", layout="wide")
 
 def get_base64_logo(path="logo.png"):
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode()
 
-# now your Base64‐logo header
+# --- Custom Header ---
 logo_base64 = get_base64_logo()
+
 st.markdown(f"""
-  <div style="display:flex; flex-direction:column; align-items:flex-start; gap:0.5rem; margin-bottom:1.5rem; margin-top: -2rem;">
-    <img src="data:image/png;base64,{logo_base64}" style="height:36px; width:auto;"/>
-  </div>
+    <style>
+        /* 1. HIDE THE DEFAULT STREAMLIT HEADER */
+        header {{
+            visibility: hidden !important;
+            height: 0 !important;
+        }}
+
+        /* 2. CREATE A CUSTOM FIXED HEADER */
+        .custom-header {{
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4rem; /* Header height */
+            background-color: #FFFFFF;
+            display: flex;
+            align-items: center;
+            padding: 0 2rem;
+            border-bottom: 1px solid #e0e0e0;
+            z-index: 1000;
+        }}
+        
+        .custom-header img {{
+            height: 2rem; /* Logo height */
+            width: auto;
+        }}
+
+        /* 3. PUSH THE MAIN CONTENT DOWN */
+        .stApp {{
+            margin-top: 4.5rem; /* Must be slightly larger than header height */
+        }}
+    </style>
+    
+    <div class="custom-header">
+        <img src="data:image/png;base64,{logo_base64}" />
+    </div>
 """, unsafe_allow_html=True)
 
 
-# Change the title to a subheader for better spacing
-st.subheader("Pre-IPO Investment Memo Generator")
+# --- Your App's Content Starts Here ---
+
+st.title("Pre-IPO Investment Memo Generator")
 st.write("Upload an IPO/DRHP PDF to generate a structured investment memo with optional Q&A.")
-
-# Remove the default title if you want to use the subheader instead
-# st.title("📝 Special Situation Memo & Infographic Generator")
-
-# The rest of your code follows...
 
 # ========== CONFIG ==========
 try:
