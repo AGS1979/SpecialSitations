@@ -20,11 +20,11 @@ st.set_page_config(page_title="Special Situation Memo & Infographic Generator", 
 # 2️⃣ One unified CSS block, full‑page padding:
 st.markdown("""
     <style>
-      /* 2rem top padding on the entire page content */
+      /* Correctly apply PADDING to push content down inside the container */
       [data-testid="stAppViewContainer"] {
-        margin-top: 2rem !important;
+        padding-top: 0rem !important; /* Adjust this value as needed */
       }
-      /* Make the Streamlit header area itself taller */
+      /* Optional: Adjust the main header if you still need it */
       header {
         padding: 1rem 2rem !important;
       }
