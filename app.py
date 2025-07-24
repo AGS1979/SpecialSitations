@@ -13,7 +13,7 @@ import yfinance as yf
 from typing import List, Dict, Tuple
 
 # --- Must be the first st.* command ---
-st.set_page_config(page_title="Pre-IPO Memo Generator", layout="wide")
+st.set_page_config(page_title="Special Situations Analyzer", layout="wide")
 
 def get_base64_logo(path="logo.png"):
     with open(path, "rb") as f:
