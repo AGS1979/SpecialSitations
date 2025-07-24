@@ -19,27 +19,16 @@ st.set_page_config(page_title="Special Situation Memo & Infographic Generator", 
 # We're targeting the container that holds all blocks in the main view.
 # 2️⃣ One unified CSS block, full‑page padding:
 st.markdown("""
-  <style>
-    /* give the entire app canvas breathing room for a 36px logo */
-    html, body {
-      padding-top: 3rem !important;
-    }
-    footer:after { content: none !important; }
-    #MainMenu, header { visibility: visible; }
-    html, body, [class*="css"] {
-      font-family: 'Segoe UI', sans-serif;
-      color: #222;
-      background-color: #f9f9f9;
-    }
-    h1, h2, h3 {
-      color: #00416A;
-      margin-bottom: 0.25rem;
-    }
-    .stButton>button {
-      background-color: #00416A; color: white; font-weight: bold; border-radius: 6px;
-    }
-    /* any other global overrides… */
-  </style>
+    <style>
+      /* 2rem top padding on the entire page content */
+      [data-testid="stAppViewContainer"] {
+        margin-top: 2rem !important;
+      }
+      /* Make the Streamlit header area itself taller */
+      header {
+        padding: 1rem 2rem !important;
+      }
+    </style>
 """, unsafe_allow_html=True)
 
 def get_base64_logo(path="logo.png"):
